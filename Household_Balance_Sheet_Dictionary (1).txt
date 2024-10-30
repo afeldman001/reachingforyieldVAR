@@ -1,0 +1,45 @@
+series	description	units
+FL152090005.Q	Households and nonprofit organizations; Net Worth	Millions of dollars
+FL152090006.Q	Households and nonprofit organizations; Net Worth, as a percentage of disposable personal income (SAAR)	Percentage
+FL152000005.Q	Households and nonprofit organizations; Total Assets	Millions of dollars
+FL152000006.Q	Households and nonprofit organizations; Total Assets, as a percentage of disposable personal income (SAAR)	Percentage
+FL154190005.Q	Households and nonprofit organizations; Total Liabilities	Millions of dollars
+FL154190006.Q	Households and nonprofit organizations; Total Liabilities,, as a percentage of disposable personal income (SAAR)	Percentage
+LM152010005.Q	Households and nonprofit organizations; Nonfinancial Assets	Millions of dollars
+LM152010006.Q	Households and nonprofit organizations; Household Nonfinancial assets, as a percentage of disposable personal income (SAAR)	Percentage
+FL154090005.Q	Households and nonprofit organizations; Financial Assets	Millions of dollars
+FL154090006.Q	Households and nonprofit organizations; Financial Assets, as a percentage of disposable personal income (SAAR)	Percentage
+FL153165105.Q	Households and nonprofit organizations; Home Mortgages	Millions of dollars
+FL153165106.Q	Households and nonprofit organizations; Home Mortgages, as a percentage of disposable personal income (SAAR)	Percentage
+FL153166000.Q	Households and nonprofit organizations; Consumer Credit	Millions of dollars
+FL153166006.Q	Households and nonprofit organizations; Consumer Credit, as a percentage of disposable personal income (SAAR)	Percentage
+FL154199005.Q	Households and nonprofit organizations; Other Liabilities	Millions of dollars
+FL154199006.Q	Households and nonprofit organizations; Other Liabilities, as a percentage of disposable personal income (SAAR)	Percentage
+LM155035015.Q	Households and nonprofit organizations; Real Estate	Millions of dollars
+LM155035016.Q	Households and nonprofit organizations; Real Estate, as a percentage of disposable personal income (SAAR)	Percentage
+LM155111005.Q	Households and nonprofit organizations; Consumer Durables	Millions of dollars
+LM155111006.Q	Households and nonprofit organizations; Consumer Durables, as a percentage of disposable personal income (SAAR)	Percentage
+LM162010005.Q	Nonprofit organizations; Nonfinancial Assets	Millions of dollars
+LM162010006.Q	Nonprofit organizations; Nonfinancial Assets, as a percentage of disposable personal income (SAAR)	Percentage
+FL154000025.Q	Households and nonprofit organizations; Deposits	Millions of dollars
+FL154000026.Q	Households and nonprofit organizations; Deposits, as a percentage of disposable personal income (SAAR)	Percentage
+LM153064105.Q	Households and nonprofit organizations; Directly held corporate equities	Millions of dollars
+LM153064106.Q	Households and nonprofit organizations; Directly held corporate equities as a percentage of disposable personal income (SAAR)	Percentage
+LM153064175.Q	Households and nonprofit organizations; Indirectly held corporate equities	Millions of dollars
+LM153064176.Q	Households and nonprofit organizations; Indirectly held corporate equities, as a percentage of disposable personal income (SAAR)	Percentage
+LM154022005.Q	Households and nonprofit organizations; Directly held debt securities	Millions of dollars
+LM154022006.Q	Households and nonprofit organizations; Directly held debt securities as a percentage of disposable personal income	Percentage
+LM154022075.Q	Households and nonprofit organizations; Indirectly held debt securities	Millions of dollars
+LM154022076.Q	Households and nonprofit organizations; Indirectly held debt securities as a percentage of disposable personal income	Percentage
+FL594190045.Q	Household defined benefit pension entitlements	Millions of dollars
+FL594190046.Q	Household defined benefit pension entitlements, as a percentage of disposable personal income (SAAR)	Percentage
+LM152090205.Q	Households and nonprofit organizations; proprietors' equity in noncorporate business	Millions of dollars
+LM152090206.Q	Households and nonprofit organizations; proprietors' equity in noncorporate business, as a percentage of disposable personal income (SAAR)	Percentage
+FL153099005.Q	Households and nonprofit organizations; Other financial assets	Millions of dollars
+FL153099006.Q	Households and nonprofit organizations; Other financial assets, as a percentage of disposable personal income (SAAR)	Percentage
+FC152090005.Q	Households and nonprofit organizations; Net Worth; Change in unadjusted level	Millions of dollars
+FC153064475.Q	Households and nonprofit organizations; Direct and indirect holdings of corporate equity; Change in unadjusted level	Millions of dollars
+FC154022375.Q	Households and nonprofit organizations; Directly and indirectly held debt securities; Change in unadjusted level	Millions of dollars
+FC155035005.Q	Households and nonprofit organizations; Real estate; Change in unadjusted level	Millions of dollars
+FC152090045.Q	Households and nonprofit organizations; other components of net worth, excluding real estate and direct and indirect holding holdings of corporate equities and debt securities; Change in unadjusted level	Millions of dollars
+FA156012005.Q	Disposable Personal Income (DPI)	Millions of dollars
