@@ -14,12 +14,18 @@ rm(list=ls())
 cat("\014")
 
 # Install required packages
+install.packages("urca")
+install.packages("tseries")
+install.packages("vars")
 install.packages("lubridate")
 install.packages("dplyr")
 install.packages("readxl")
 install.packages("ggplot2")
 install.packages("tidyr")
 install.packages("purrr")
+library(urca)
+library(tseries)
+library(vars)
 library(devtools)
 library(BVAR)
 library(bvartools)
@@ -142,8 +148,12 @@ data <- reduce(
 
 # Filter data for matching date range (Q2 1987 - Q3 2023)
 data <- data[143:288, ]
-data <- data %>%
-  mutate(ffr=as.numeric(ffr))
+data$ffr <- as.numeric(unlist(data$ffr))
+data$market <- as.numeric(unlist(data$market))
+data$risk_assets <- as.numeric(unlist(data$risk_assets))
+data$cci <- as.numeric(unlist(data$cci))
+data$sentiment <- as.numeric(unlist(data$sentiment))
+data$p_exp <- as.numeric(unlist(data$p_exp))
 
 # Visualize data
 ggplot(data, aes(x=Quarter)) +
@@ -169,4 +179,68 @@ ggplot(data, aes(x=Quarter)) +
 ggplot(data, aes(x=Quarter)) +
   geom_line(aes(y=market), color="purple") +
   labs(title="S&P 500 Index", x="Quarter", y="Index ($)")
+
+# Transform data for stationarity
+data_adj <- data %>%
+  transmute(
+    Quarter, # keep the date column for time alignment
+  # log-difference the risky assets and s&p 500 series
+    ra_diff=log(risk_assets)-lag(log(risk_assets),1),
+    market_diff=log(market)-lag(log(market),1),
+         # first order difference federal funds effective rate and consumer confidence
+    ffr_diff=ffr-lag(ffr,1),
+    cci_diff=cci-lag(cci,1),
+    sentiment,
+    p_exp
+    )
+
+data_adj <- data_adj %>%
+  slice(-1)
+
+# Visulaize data again
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=ra_diff), color="blue") +
+  labs(title="Risky Assets", x="Quarter", y="Risky Assets (millions $)")
+
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=ffr_diff), color="black") +
+  labs(title="Federal Funds Effective Rate", x="Quarter", y="DFF (%)")
+
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=sentiment), color="green") +
+  labs(title="Investor Sentiment", x="Quarter", y="Bull-Bear Spread (%)")
+
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=p_exp), color="red") +
+  labs(title="Inflation Expectations", x="Quarter", y="Expectations (%)")
+
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=cci_diff), color="orange") +
+  labs(title="Consumer Confidence Index", x="Quarter", y="CCI")
+
+ggplot(data_adj, aes(x=Quarter)) +
+  geom_line(aes(y=market_diff), color="purple") +
+  labs(title="S&P 500 Index", x="Quarter", y="Index ($)")
+
+# Test for stationarity using ADF
+adf_ra <- ur.df(data_adj$ra_diff, type="drift", selectlags="AIC")
+adf_market <- ur.df(data_adj$market_diff, type="drift", selectlags="AIC")
+adf_ffr <- ur.df(data_adj$ffr_diff, type = "drift", selectlags = "AIC")
+adf_cci <- ur.df(data_adj$cci_diff, type = "drift", selectlags = "AIC")
+adf_sentiment <- ur.df(data_adj$sentiment, type = "drift", selectlags = "AIC")
+adf_p_exp <- ur.df(data_adj$p_exp, type = "drift", selectlags = "AIC")
+  
+# Display ADF test results
+summary(adf_ra)            # result: p-value < 0.001 (2.2e-16)   -> stationary
+summary(adf_market)        # result: p-value < 0.001 (3.668e-12) -> stationary
+summary(adf_ffr)           # result: p-value < 0.001 (7.355e-06) -> stationary
+summary(adf_cci)           # result: p-value < 0.001 (1.851e-12) -> stationary
+summary(adf_sentiment)     # result: p-value < 0.001 (1.405e-08) -> stationary
+summary(adf_p_exp)         # result: p-value < 0.001 (2.2e-16)   -> stationary
+
+# Perform lag selection using BIC
+data_adj_subset <- data_adj %>% select(-Quarter)
+lag_selection <- VARselect(data_adj_subset, lag.max = 10, type = "const")
+bic_lag <- lag_selection$selection["SC(n)"] # BIC (Schwarz Criterion)
+print(bic_lag)
 
