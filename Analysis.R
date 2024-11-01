@@ -6,36 +6,21 @@
 # aaron.feldman@student.uni-tuebingen.de
 # chirag.khanna@student.uni-tuebingen.de
 
+# Define and install/load all required packages
+packages <- c("urca", "tseries", "vars", "lubridate", "dplyr", 
+              "readxl", "ggplot2", "tidyr", "purrr", "devtools", 
+              "BVAR", "bvartools")
 
-# Clear variables from workspace
+# Install any packages that aren't already installed
+lapply(packages, function(pkg) {
+  if (!require(pkg, character.only = TRUE)) {
+    install.packages(pkg, dependencies = TRUE)
+    library(pkg, character.only = TRUE)
+  }
+})
+# Clear variables from workspace and console output
 rm(list=ls())
-
-# Clear console output
 cat("\014")
-
-# Install required packages
-install.packages("urca")
-install.packages("tseries")
-install.packages("vars")
-install.packages("lubridate")
-install.packages("dplyr")
-install.packages("readxl")
-install.packages("ggplot2")
-install.packages("tidyr")
-install.packages("purrr")
-library(urca)
-library(tseries)
-library(vars)
-library(devtools)
-library(BVAR)
-library(bvartools)
-library(readxl)
-library(dplyr)
-library(lubridate)
-library(ggplot2)
-library(tidyr)
-library(purrr)
-
 
 
 # Load household balance sheet data and isolate key variables 
@@ -243,4 +228,55 @@ data_adj_subset <- data_adj %>% select(-Quarter)
 lag_selection <- VARselect(data_adj_subset, lag.max = 10, type = "const")
 bic_lag <- lag_selection$selection["SC(n)"] # BIC (Schwarz Criterion)
 print(bic_lag)
+
+# Reorder variables for BVAR analysis. The ordering will have important theoretical implications
+# if Cholesky is the chosen identification startegy.
+data_adj_subset <- data_adj_subset %>%
+  select(ffr_diff, p_exp , cci_diff, sentiment, market_diff, ra_diff)
+
+# Define and fit the BVAR model with selected lag length
+x <- bvar(data_adj_subset, lags = 1, n_draw = 10000L, n_burn = 2000L, verbose = TRUE)
+
+# Calculate impulse responses
+irf(x) <- irf(x, horizon = 10, fevd = FALSE)
+
+# Extract the results from the BVAR model object
+irf_results <- irf(x)$irf
+
+irf_ffr <- irf_results[, , , 1] # Extract the responses to an 'ffr_diff' shock
+
+# Extract the number of draws, variables, and horizons for indexing
+num_draws <- dim(irf_ffr)[1]
+num_vars <- dim(irf_ffr)[2]
+num_horizons <- dim(irf_ffr)[3]
+
+# Create a list to store each variable's IRF data
+irf_ffr_list <- lapply(1:num_vars, function(i) {
+  data.frame(
+    Horizon = 0:(num_horizons - 1),
+    Variable = paste("Variable", i),  
+    Response = -apply(irf_ffr[, i, ], 2, mean),  # Average over draws and invert for negative shock
+    Lower = -apply(irf_ffr[, i, ], 2, quantile, 0.16),  # Adjust lower bound
+    Upper = -apply(irf_ffr[, i, ], 2, quantile, 0.84)   # Adjust upper bound
+  )
+})
+
+# Bind all variable responses into a single data frame for plotting
+irf_ffr_long <- do.call("rbind", irf_ffr_list)
+
+# Plot using ggplot2
+ggplot(irf_ffr_long, aes(x = Horizon, y = Response)) +
+  geom_line(color = "blue") +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "lightblue", alpha = 0.3) +
+  facet_wrap(~ Variable, scales = "free_y") +
+  labs(title = "Impulse Response to a Negative Shock in Federal Funds Rate (ffr_diff)", 
+       x = "Horizon (Quarters)", 
+       y = "Response") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    strip.text = element_text(size = 12, face = "bold")
+  )
 
