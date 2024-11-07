@@ -85,70 +85,54 @@ ggplot(irf_df, aes(x = Horizon, y = Response)) +
   ) +
   theme_minimal()
 
-# Calculate statistics for Horizon 0 and Horizon 1 and split the results into separate tables
-posterior_mean_0 <- list()
-posterior_sd_0 <- list()
-lower_68_0 <- list()
-upper_68_0 <- list()
+# Initialize lists for summary tables
+summary_tables <- list()
 
-posterior_mean_1 <- list()
-posterior_sd_1 <- list()
-lower_68_1 <- list()
-upper_68_1 <- list()
-
-for (variable in colnames(data_adj_subset)) {
-  # Extract response draws for each horizon for the specific variable
-  # Invert responses for the "r" shock to simulate a negative shock consistently
-  response_draws <- if(variable == "r") -irf_result$irf[, variable, , r_position] else irf_result$irf[, variable, , r_position]
+# Loop over each horizon (0 to 5)
+for (h in 0:5) {
+  # Initialize lists to store results for this horizon
+  posterior_mean <- list()
+  lower_68 <- list()
+  upper_68 <- list()
   
-  # Horizon 0 (Contemporaneous impact)
-  mean_0 <- mean(response_draws[, 1])
-  sd_0 <- sd(response_draws[, 1])
-  lower_68_0_h <- quantile(response_draws[, 1], probs = 0.16)
-  upper_68_0_h <- quantile(response_draws[, 1], probs = 0.84)
+  # Loop over each variable and extract the relevant IRF values
+  for (variable in colnames(data_adj_subset)) {
+    # Extract the response draws from irf_result directly
+    response_draws <- irf_result$irf[, variable, , r_position]
+    
+    # Invert the response values if the variable is "r" to simulate a negative shock
+    if (variable == "r") {
+      response_draws <- -response_draws
+    }
+    
+    # Calculate mean, lower bound (16th percentile), and upper bound (84th percentile) directly from irf_result
+    mean_h <- mean(response_draws[, h + 1])
+    lower_68_h <- quantile(response_draws[, h + 1], probs = 0.16)
+    upper_68_h <- quantile(response_draws[, h + 1], probs = 0.84)
+    
+    # Store the results
+    posterior_mean[[length(posterior_mean) + 1]] <- mean_h
+    lower_68[[length(lower_68) + 1]] <- lower_68_h
+    upper_68[[length(upper_68) + 1]] <- upper_68_h
+  }
   
-  # Store Horizon 0 results
-  posterior_mean_0[[length(posterior_mean_0) + 1]] <- mean_0
-  posterior_sd_0[[length(posterior_sd_0) + 1]] <- sd_0
-  lower_68_0[[length(lower_68_0) + 1]] <- lower_68_0_h
-  upper_68_0[[length(upper_68_0) + 1]] <- upper_68_0_h
-  
-  # Horizon 1 (First quarter impact)
-  mean_1 <- mean(response_draws[, 2])
-  sd_1 <- sd(response_draws[, 2])
-  lower_68_1_h <- quantile(response_draws[, 2], probs = 0.16)
-  upper_68_1_h <- quantile(response_draws[, 2], probs = 0.84)
-  
-  # Store Horizon 1 results
-  posterior_mean_1[[length(posterior_mean_1) + 1]] <- mean_1
-  posterior_sd_1[[length(posterior_sd_1) + 1]] <- sd_1
-  lower_68_1[[length(lower_68_1) + 1]] <- lower_68_1_h
-  upper_68_1[[length(upper_68_1) + 1]] <- upper_68_1_h
+  # Create a data frame for this horizon's results
+  summary_tables[[h + 1]] <- data.frame(
+    Variable = colnames(data_adj_subset),
+    Horizon = h,
+    Posterior_Mean = unlist(posterior_mean),
+    Lower_68 = unlist(lower_68),
+    Upper_68 = unlist(upper_68)
+  )
 }
 
-# Create separate data frames for Horizon 0 and Horizon 1 results
-summary_df_0 <- data.frame(
-  Variable = colnames(data_adj_subset),
-  Horizon = 0,
-  Posterior_Mean = unlist(posterior_mean_0),
-  Lower_68 = unlist(lower_68_0),
-  Upper_68 = unlist(upper_68_0)
-)
+# Print summary tables for horizons 0 to 5
+for (h in 0:5) {
+  cat(paste0("Horizon ", h, " Summary\n"))
+  print(summary_tables[[h + 1]])
+}
 
-summary_df_1 <- data.frame(
-  Variable = colnames(data_adj_subset),
-  Horizon = 1,
-  Posterior_Mean = unlist(posterior_mean_1),
-  Lower_68 = unlist(lower_68_1),
-  Upper_68 = unlist(upper_68_1)
-)
 
-# Display the summary tables for Horizon 0 and Horizon 1
-print("Horizon 0 Summary")
-print(summary_df_0)
-
-print("Horizon 1 Summary")
-print(summary_df_1)
 
 
 
@@ -169,32 +153,32 @@ print(summary_df_1)
 # RMSE: 2.326755
 # MAE: 1.052075
 #
+
+#Orderings attempted:
 #
-# Orderings attempted:
-#
-# c("r", "y", "u", "p", "p_exp", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("y", "u", "r", "p", "p_exp", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("p", "p_exp", "r", "y", "u", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("market_diff", "sentiment", "r", "y", "u", "p", "p_exp", "disp_inc", "cci_diff", "ra"),
-# c("sentiment", "cci_diff", "r", "y", "u", "p", "p_exp", "disp_inc", "market_diff", "ra"),
-# c("sentiment", "market_diff", "cci_diff", "y", "u", "p", "p_exp", "disp_inc", "r", "ra"),
-# c("market_diff", "sentiment", "cci_diff", "disp_inc", "y", "u", "p", "p_exp", "r", "ra"),
-# c("sentiment", "cci_diff", "market_diff", "u", "y", "disp_inc", "p", "p_exp", "r", "ra"),
-# c("market_diff", "sentiment", "cci_diff", "y", "p_exp", "u", "disp_inc", "p", "r", "ra"),
-# c("r", "y", "u", "p", "p_exp", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("y", "u", "r", "p", "p_exp", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("p", "p_exp", "r", "y", "u", "sentiment", "market_diff", "cci_diff", "ra"),
-# c("market_diff", "sentiment", "r", "y", "u", "p", "p_exp", "cci_diff", "ra"),
-# c("sentiment", "cci_diff", "r", "y", "u", "p", "p_exp", "market_diff", "ra"),
-# c("sentiment", "market_diff", "cci_diff", "y", "u", "p", "p_exp", "r", "ra"),
-# c("market_diff", "sentiment", "cci_diff", "y", "u", "p", "p_exp", "r", "ra"),
-# c("sentiment", "cci_diff", "market_diff", "u", "y", "p", "p_exp", "r", "ra"),
-# c("market_diff", "sentiment", "cci_diff", "y", "p_exp", "u", "p", "r", "ra"),
-# c("cci_diff", "sentiment", "market_diff", "u", "y", "p", "p_exp", "r", "ra"),
-# c("sentiment", "market_diff", "p", "p_exp", "y", "u", "cci_diff", "r", "ra"),
-# c("sentiment", "market_diff", "p", "p_exp", "y", "u", "cci_diff", "ra", "r"),
-# c("sentiment", "cci_diff", "market_diff", "p", "p_exp", "y", "u", "ra", "r")
-#
+#c("r", "y", "u", "p", "p_exp", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("y", "u", "r", "p", "p_exp", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("p", "p_exp", "r", "y", "u", "disp_inc", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("market_diff", "sentiment", "r", "y", "u", "p", "p_exp", "disp_inc", "cci_diff", "ra"),
+#c("sentiment", "cci_diff", "r", "y", "u", "p", "p_exp", "disp_inc", "market_diff", "ra"),
+#c("sentiment", "market_diff", "cci_diff", "y", "u", "p", "p_exp", "disp_inc", "r", "ra"),
+#c("market_diff", "sentiment", "cci_diff", "disp_inc", "y", "u", "p", "p_exp", "r", "ra"),
+#c("sentiment", "cci_diff", "market_diff", "u", "y", "disp_inc", "p", "p_exp", "r", "ra"),
+#c("market_diff", "sentiment", "cci_diff", "y", "p_exp", "u", "disp_inc", "p", "r", "ra"),
+#c("r", "y", "u", "p", "p_exp", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("y", "u", "r", "p", "p_exp", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("p", "p_exp", "r", "y", "u", "sentiment", "market_diff", "cci_diff", "ra"),
+#c("market_diff", "sentiment", "r", "y", "u", "p", "p_exp", "cci_diff", "ra"),
+#c("sentiment", "cci_diff", "r", "y", "u", "p", "p_exp", "market_diff", "ra"),
+#c("sentiment", "market_diff", "cci_diff", "y", "u", "p", "p_exp", "r", "ra"),
+#c("market_diff", "sentiment", "cci_diff", "y", "u", "p", "p_exp", "r", "ra"),
+#c("sentiment", "cci_diff", "market_diff", "u", "y", "p", "p_exp", "r", "ra"),
+#c("market_diff", "sentiment", "cci_diff", "y", "p_exp", "u", "p", "r", "ra"),
+#c("cci_diff", "sentiment", "market_diff", "u", "y", "p", "p_exp", "r", "ra"),
+#c("sentiment", "market_diff", "p", "p_exp", "y", "u", "cci_diff", "r", "ra"),
+#c("sentiment", "market_diff", "p", "p_exp", "y", "u", "cci_diff", "ra", "r"),
+#c("sentiment", "cci_diff", "market_diff", "p", "p_exp", "y", "u", "ra", "r")
+
 
 
 
