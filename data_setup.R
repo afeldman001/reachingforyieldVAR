@@ -37,6 +37,9 @@ u <- read.csv("https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR
 # Load inflation rate
 p <- read.csv("https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/CPIAUCSL.csv")
 
+# Load disposable income data
+disp_inc <- read.csv("https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/DSPIC96.csv")
+
 # Load household balance sheet data and isolate key variables 
 householdRA <- read.csv("https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/Household_equity_ownership.csv")
 
@@ -106,6 +109,7 @@ market <- market %>%
 colnames(y) <- c("Quarter", "GDP")
 colnames(u) <- c("Quarter", "u")
 colnames(p) <- c("Quarter", "p")
+colnames(disp_inc) <- c("Quarter", "disp_inc")
 colnames(ra) <- c("Quarter", "risk_assets")
 colnames(sentiment_q) <- c("Quarter", "sentiment")
 colnames(p_exp) <- c("Quarter", "p_exp")
@@ -117,6 +121,7 @@ colnames(r) <- c("Quarter", "r")
 y$Quarter <- as.Date(y$Quarter)
 u$Quarter <- as.Date(u$Quarter)
 p$Quarter <- as.Date(p$Quarter)
+disp_inc$Quarter <- as.Date(disp_inc$Quarter)
 ra$Quarter <- as.Date(ra$Quarter)
 sentiment_q$Quarter <- as.Date(sentiment_q$Quarter)
 p_exp$Quarter <- as.Date(p_exp$Quarter)
@@ -131,6 +136,7 @@ quarters <- data.frame(Quarter = seq.Date(from = as.Date("1987-07-01"), to = as.
 y <- left_join(quarters, y, by = "Quarter")
 u <- left_join(quarters, u, by = "Quarter")
 p <- left_join(quarters, p, by = "Quarter")
+disp_inc <- left_join(quarters, disp_inc, by = "Quarter")
 ra <- left_join(quarters, ra, by = "Quarter")
 sentiment_q <- left_join(quarters, sentiment_q, by = "Quarter")
 p_exp <- left_join(quarters, p_exp, by = "Quarter")
@@ -140,7 +146,7 @@ r <- left_join(quarters, r, by = "Quarter")
 
 # Combine data into data frame, joining on "Quarter"
 data <- reduce(
-  list(y, u, p, ra, sentiment_q, p_exp, market, cci, r),
+  list(y, u, p, ra, disp_inc, sentiment_q, p_exp, market, cci, r),
   full_join,
   by="Quarter"
 )
@@ -148,7 +154,7 @@ data <- reduce(
 # Convert character columns to numeric, handling any NA values that might be present
 data <- data %>%
   mutate(
-    across(c(GDP, u, p, risk_assets, r, sentiment, p_exp, cci, market), ~ as.numeric(.))
+    across(c(GDP, u, p, risk_assets, disp_inc, r, sentiment, p_exp, cci, market), ~ as.numeric(.))
   )
 
 # Check correlation matrix to identify highly correlated variables
@@ -161,7 +167,7 @@ print(cor_matrix)
 # Plot all variables in subplots
 data_long <- data %>%
   pivot_longer(
-    cols = c(GDP, u, p, risk_assets, r, sentiment, p_exp, cci, market),
+    cols = c(GDP, u, p, risk_assets, disp_inc, r, sentiment, p_exp, cci, market),
     names_to = "Variable",
     values_to = "Value"
   )
@@ -185,6 +191,7 @@ data_adj <- data %>%
     y=data$GDP,
     u=data$u,
     p=data$p,
+    disp_inc=data$disp_inc,
     r,
     sentiment,
     p_exp
@@ -198,7 +205,7 @@ data_adj <- data_adj %>%
 # Plot all variables in subplots
 data_long <- data_adj %>%
   pivot_longer(
-    cols = c(y, u, p, ra, r, sentiment, p_exp, cci_diff, market_diff),
+    cols = c(y, u, p, ra, disp_inc, r, sentiment, p_exp, cci_diff, market_diff),
     names_to = "Variable",
     values_to = "Value"
   )
@@ -215,6 +222,7 @@ ggplot(data_long, aes(x = Quarter, y = Value)) +
 adf_y <- ur.df(data_adj$y, type="drift", selectlags="AIC")
 adf_u <- ur.df(data_adj$u, type="drift", selectlags="AIC")
 adf_p <- ur.df(data_adj$p, type="drift", selectlags="AIC")
+adf_dis <- ur.df(data_adj$disp_inc, type="drift", selectlags="AIC")
 adf_ra <- ur.df(data_adj$ra, type="drift", selectlags="AIC")
 adf_market <- ur.df(data_adj$market_diff, type="drift", selectlags="AIC")
 adf_r <- ur.df(data_adj$r, type = "drift", selectlags = "AIC")
@@ -226,6 +234,7 @@ adf_p_exp <- ur.df(data_adj$p_exp, type = "drift", selectlags = "AIC")
 summary(adf_y)             # result: p-value < 0.001 (2.2e-16)   -> stationary
 summary(adf_u)             # result: p-value < 0.001 (2.2e-16)   -> stationary
 summary(adf_p)             # result: p-value < 0.001 (3.347e-11) -> stationary
+summary(adf_dis)           # result: p-value < 0.001 (2.2e-16) -> stationary
 summary(adf_ra)            # result: p-value < 0.001 (2.2e-16)   -> stationary
 summary(adf_market)        # result: p-value < 0.001 (2.444e-12) -> stationary
 summary(adf_r)             # result: p-value < 0.001 (4.603e-06) -> stationary
@@ -242,10 +251,10 @@ print(bic_lag)
 # Reorder variables for BVAR analysis. The ordering will have important theoretical implications
 # if Cholesky is the chosen identification startegy.
 data_adj_subset <- data_adj_subset %>%
-  select(y, u, p, r, market_diff, sentiment, cci_diff, p_exp, ra)
+  select(cci_diff, sentiment, market_diff, u, disp_inc, y, p, p_exp, r, ra) 
 
 # Prepare data with named columns
-colnames(data_adj_subset) <- c("y", "u", "p", "r", "market_diff", "sentiment", "cci_diff", "p_exp", "ra")
+colnames(data_adj_subset) <- c("cci_diff", "sentiment", "market_diff", "u", "disp_inc", "y", "p", "p_exp", "r", "ra")
 
 # Ensure data_adj_subset has all predictor columns and excludes "ra" if it's the response
 predictors <- setdiff(names(data_adj_subset), "ra")
