@@ -40,7 +40,7 @@ priors <- bv_priors(
 x <- bvar(data_adj_subset, lags = 2, n_draw = 50000L, n_burn = 5000L, priors = priors, verbose = TRUE)
 
 # Calculate impulse responses with a horizon of 20
-irf_result <- irf(x, horizon = 20, fevd = FALSE)
+irf_result <- irf(x, horizon = 20, fevd = TRUE)
 
 # Rename dimensions of the IRF result array to match variable names
 dimnames(irf_result$irf)[[2]] <- colnames(data_adj_subset)  # Response variables
@@ -132,8 +132,60 @@ for (h in 0:5) {
   print(summary_tables[[h + 1]])
 }
 
+install.packages("gt")
+library(gt)
 
 
+# Function to generate polished FEVD tables using gt, including all shocks
+report_fevd_summary_gt <- function(fevd_data, horizons, save_html = FALSE) {
+  for (h in horizons) {
+    fevd_horizon <- fevd_data[[h + 1]]
+    
+    # Summing all FEVD contributions for validation
+    fevd_check <- fevd_horizon %>%
+      group_by(Response) %>%
+      summarize(Total_FEVD = sum(FEVD) * 100)  # Sum as a percentage
+    
+    # If FEVD doesn't sum up to ~100%, print a warning
+    if (any(abs(fevd_check$Total_FEVD - 100) > 1)) {
+      warning("FEVD contributions for some response variables do not sum to 100%.")
+      print(fevd_check)  # Show the discrepancies
+    }
+    
+    # Include all shocks for each response variable
+    fevd_summary <- fevd_horizon %>%
+      mutate(FEVD_Percent = round(FEVD * 100, 2)) %>%
+      select(Response, Shock, Horizon, FEVD_Percent) %>%
+      pivot_wider(names_from = Shock, values_from = FEVD_Percent, values_fill = 0) %>%
+      rename_with(~ paste0("FEVD_", .), -Response)
+    
+    # Convert to gt table and store in variable
+    gt_table <- fevd_summary %>%
+      gt() %>%
+      tab_header(title = paste("FEVD Contributions at Horizon", h)) %>%
+      fmt_number(columns = 2:ncol(fevd_summary), decimals = 2) %>%
+      tab_style(
+        style = cell_text(weight = "bold"),
+        locations = cells_column_labels()
+      ) %>%
+      tab_options(
+        table.font.size = "small",
+        column_labels.font.weight = "bold"
+      )
+    
+    # Print the table in the console or Viewer pane
+    print(gt_table)
+    
+    # Optionally save the table as HTML for reporting
+    if (save_html) {
+      gtsave(gt_table, filename = paste0("FEVD_Horizon_", h, "_Summary.html"))
+    }
+  }
+}
+
+# Define horizons to report, including horizon 0
+horizons_to_report <- 0:5
+report_fevd_summary_gt(fevd_summary, horizons_to_report, save_html = TRUE)
 
 
 
