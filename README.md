@@ -8,9 +8,8 @@ User Guide:
 
 1. Run 'data_setup.R': loads data, isolates key variables, plots variables, tests for stationarity, transforms series, plots transformed series, selects lag length, and applies order for      Cholesky decomposition.
   
-2. Run 'Analysis.R' to fit the BVAR model, calculate IRF, and plot the responses of variables to a negative shock in the federal funds rate.
+2. Run 'Analysis.R' to fit the BVAR model using the BVAR package in R (Kuschnig, N., & Vashold, L., 2024), calculate IRF, plot the responses of variables to a negative shock in the 3-month treasury yield, report the IRF results for horizons 0 -5 in the console, calculates Forecast Error Variance decomposition and produces summary tables for Horizons 0 - 5.
 
-* Note: the scripts should be run in this order to avoid conflicts when installing packages. 
 
 Data sources:
 
