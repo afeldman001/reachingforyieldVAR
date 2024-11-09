@@ -24,4 +24,9 @@ Data sources:
 
 5. Investor sentiment: Investors, A. A. of I. (n.d.). Sentiment survey historical data. AAII. https://www.aaii.com/sentimentsurvey/sent_results 
 
-6. S&P 500 Index: Investors, A. A. of I. (n.d.). Sentiment survey historical data. AAII. https://www.aaii.com/sentimentsurvey/sent_results 
+6. S&P 500 Index: Investors, A. A. of I. (n.d.). Sentiment survey historical data. AAII. https://www.aaii.com/sentimentsurvey/sent_results
+
+7. Board of Governors of the Federal Reserve System (US), Households and Nonprofit Organizations; Directly and Indirectly Held Corporate Equities as a Percentage of Financial Assets; Assets, Level [BOGZ1FL153064486Q], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/BOGZ1FL153064486Q, November 9, 2024.
+
+8. Board of Governors of the Federal Reserve System (US), 3-Month Treasury Bill Secondary Market Rate, Discount Basis [TB3MS], retrieved from FRED, Federal Reserve Bank of St. Louis; https://fred.stlouisfed.org/series/TB3MS, November 9, 2024.
+
