@@ -10,6 +10,7 @@ User Guide:
   
 2. Run 'Analysis.R' to fit the BVAR model using the BVAR package in R (Kuschnig, N., & Vashold, L., 2024), calculate IRF, plot the responses of variables to a negative shock in the 3-month treasury yield, report the IRF results for horizons 0 -5 in the console, calculates Forecast Error Variance decomposition and produces summary tables for Horizons 0 - 5.
 
+3. There is a separate section of 'Analysis.R' that performs an iterative model configuration and hyperparameter tuning that assists in specifying the model. 
 
 Data sources:
 
