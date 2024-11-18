@@ -141,64 +141,72 @@ dimnames(fevd_quantiles) <- list(
   Shock = irf_result$variables
 )
 
-# Function to extract contributions for the shock in 'r'
-extract_fevd_r <- function(horizon) {
-  fevd_r <- fevd_quantiles[, , horizon + 1, "r"]
-  fevd_r <- as.data.frame(t(fevd_r))  # Convert to data frame for easier inspection
-  colnames(fevd_r) <- c("Lower_68", "Median", "Upper_68")
-  fevd_r$Response_Variable <- irf_result$variables
-  fevd_r$Horizon <- horizon
-  return(fevd_r)
+# Verify normalization for all variables across all shocks at each horizon
+verify_normalization <- function(horizon) {
+  total_contributions <- apply(fevd_quantiles["50%", , horizon + 1, ], 1, sum)
+  cat("\nNormalization check at Horizon", horizon, ":\n")
+  print(total_contributions)
 }
 
-# Summarize FEVD for specified horizons
-horizons_to_report <- c(1, 5, 10)
-fevd_r_tables <- lapply(horizons_to_report, extract_fevd_r)
-
-# Separate and clean tables for each horizon
-for (i in seq_along(horizons_to_report)) {
-  horizon <- horizons_to_report[i]
-  table_name <- paste0("fevd_r_horizon_", horizon)  # Dynamically name each table
-  assign(table_name, fevd_r_tables[[i]])  # Create a separate object for each table
-  
-  # Clean up the table for better readability
-  cleaned_table <- fevd_r_tables[[i]] %>%
-    dplyr::select(Response_Variable, Median, Lower_68, Upper_68) %>%
-    dplyr::mutate(
-      Median = round(Median, 3),
-      Lower_68 = round(Lower_68, 3),
-      Upper_68 = round(Upper_68, 3)
-    ) %>%
-    dplyr::arrange(desc(Median))
-  
-  # Print the table
-  cat("\nFEVD Contributions from Shock in 'r' at Horizon", horizon, ":\n")
-  print(cleaned_table)
-  
-  # Save to CSV
-  write.csv(cleaned_table, paste0("FEVD_Shock_r_Horizon_", horizon, ".csv"), row.names = FALSE)
+# Check normalization for all horizons
+for (h in 0:(length(dimnames(fevd_quantiles)$Horizon) - 1)) {
+  verify_normalization(h)
 }
 
-# Combine all results into one table for plotting
+# Function to extract and normalize contributions for the shock in 'r'
+extract_normalized_fevd_r <- function(horizon) {
+  # Extract the contributions of the shock in 'r' to all variables
+  fevd_r <- fevd_quantiles["50%", , horizon + 1, "r"]
+  
+  # Normalize the contributions so that they sum to 1
+  normalized_fevd_r <- fevd_r / sum(fevd_r)
+  
+  # Convert to a data frame for better inspection
+  fevd_r_df <- data.frame(
+    Response_Variable = dimnames(fevd_quantiles)$Variable,
+    Median = normalized_fevd_r,
+    Horizon = horizon
+  )
+  
+  return(fevd_r_df)
+}
+
+# Summarize normalized FEVD for specified horizons
+horizons_to_report <- c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+fevd_r_tables <- lapply(horizons_to_report, extract_normalized_fevd_r)
+
+# Combine all results into one table for inspection
 fevd_r_combined <- do.call(rbind, fevd_r_tables)
 
-# Remove rows with missing values for plotting
-fevd_r_combined <- fevd_r_combined %>%
-  filter(!is.na(Median), !is.na(Lower_68), !is.na(Upper_68))
+# Save separate and combined results
+for (i in seq_along(horizons_to_report)) {
+  horizon <- horizons_to_report[i]
+  table_name <- paste0("normalized_fevd_r_horizon_", horizon)
+  cleaned_table <- fevd_r_tables[[i]] %>%
+    dplyr::mutate(Median = round(Median, 3)) %>%
+    dplyr::arrange(desc(Median))
+  
+  assign(table_name, cleaned_table)
+  
+  # Save as CSV
+  write.csv(cleaned_table, paste0("Normalized_FEVD_Shock_r_Horizon_", horizon, ".csv"), row.names = FALSE)
+  
+  # Print for verification
+  cat("\nNormalized FEVD Contributions from Shock in 'r' at Horizon", horizon, ":\n")
+  print(cleaned_table)
+}
 
-# Plot for FEVD contributions from shock in 'r'
-ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, fill = Response_Variable)) +
+# Improved plot for normalized contributions
+ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, group = Response_Variable)) +
   geom_line(size = 1.2) +
-  geom_ribbon(aes(ymin = Lower_68, ymax = Upper_68), alpha = 0.15) +
+  geom_point(size = 3) +
   scale_color_viridis_d(option = "D", begin = 0, end = 0.9) +
-  scale_fill_viridis_d(option = "D", begin = 0, end = 0.9) +
   labs(
-    title = "FEVD Contributions from a Shock in 'r'",
-    subtitle = "Median contributions with 68% credible intervals across horizons",
+    title = "Normalized FEVD Contributions from a Shock in 'r'",
+    subtitle = "Normalized median contributions across horizons",
     x = "Horizon (Quarters)",
-    y = "Variance Contribution (%)",
-    color = "Response Variable",
-    fill = "Response Variable"
+    y = "Normalized Variance Contribution (%)",
+    color = "Response Variable"
   ) +
   theme_minimal(base_size = 14) +
   theme(
@@ -208,10 +216,8 @@ ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, 
     plot.title = element_text(size = 16, face = "bold"),
     plot.subtitle = element_text(size = 14, margin = margin(b = 10)),
     axis.title = element_text(size = 14),
-    axis.text = element_text(size = 12),
-    strip.text = element_text(size = 12, face = "bold")
+    axis.text = element_text(size = 12)
   )
-
 
 
 #### Model Configuration Analysis #####
@@ -364,5 +370,7 @@ for (ordering in orderings) {
 best_forecast <- forecast_results[which.min(forecast_results$RMSE), ]
 print("Best Forecast Configuration:")
 print(best_forecast)
+
+
 
 
