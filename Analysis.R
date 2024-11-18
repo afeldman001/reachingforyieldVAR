@@ -132,60 +132,85 @@ for (h in 0:5) {
   print(summary_tables[[h + 1]])
 }
 
-install.packages("gt")
-library(gt)
+# Extract FEVD quantiles from the irf_result object
+fevd_quantiles <- irf_result$fevd$quants
+dimnames(fevd_quantiles) <- list(
+  Quantile = c("16%", "50%", "84%"),
+  Variable = irf_result$variables,
+  Horizon = 0:(irf_result$setup$horizon - 1),
+  Shock = irf_result$variables
+)
 
-
-# Function to generate polished FEVD tables using gt, including all shocks
-report_fevd_summary_gt <- function(fevd_data, horizons, save_html = FALSE) {
-  for (h in horizons) {
-    fevd_horizon <- fevd_data[[h + 1]]
-    
-    # Summing all FEVD contributions for validation
-    fevd_check <- fevd_horizon %>%
-      group_by(Response) %>%
-      summarize(Total_FEVD = sum(FEVD) * 100)  # Sum as a percentage
-    
-    # If FEVD doesn't sum up to ~100%, print a warning
-    if (any(abs(fevd_check$Total_FEVD - 100) > 1)) {
-      warning("FEVD contributions for some response variables do not sum to 100%.")
-      print(fevd_check)  # Show the discrepancies
-    }
-    
-    # Include all shocks for each response variable
-    fevd_summary <- fevd_horizon %>%
-      mutate(FEVD_Percent = round(FEVD * 100, 2)) %>%
-      select(Response, Shock, Horizon, FEVD_Percent) %>%
-      pivot_wider(names_from = Shock, values_from = FEVD_Percent, values_fill = 0) %>%
-      rename_with(~ paste0("FEVD_", .), -Response)
-    
-    # Convert to gt table and store in variable
-    gt_table <- fevd_summary %>%
-      gt() %>%
-      tab_header(title = paste("FEVD Contributions at Horizon", h)) %>%
-      fmt_number(columns = 2:ncol(fevd_summary), decimals = 2) %>%
-      tab_style(
-        style = cell_text(weight = "bold"),
-        locations = cells_column_labels()
-      ) %>%
-      tab_options(
-        table.font.size = "small",
-        column_labels.font.weight = "bold"
-      )
-    
-    # Print the table in the console or Viewer pane
-    print(gt_table)
-    
-    # Optionally save the table as HTML for reporting
-    if (save_html) {
-      gtsave(gt_table, filename = paste0("FEVD_Horizon_", h, "_Summary.html"))
-    }
-  }
+# Function to extract contributions for the shock in 'r'
+extract_fevd_r <- function(horizon) {
+  fevd_r <- fevd_quantiles[, , horizon + 1, "r"]
+  fevd_r <- as.data.frame(t(fevd_r))  # Convert to data frame for easier inspection
+  colnames(fevd_r) <- c("Lower_68", "Median", "Upper_68")
+  fevd_r$Response_Variable <- irf_result$variables
+  fevd_r$Horizon <- horizon
+  return(fevd_r)
 }
 
-# Define horizons to report, including horizon 0
-horizons_to_report <- 0:5
-report_fevd_summary_gt(fevd_summary, horizons_to_report, save_html = TRUE)
+# Summarize FEVD for specified horizons
+horizons_to_report <- c(1, 5, 10)
+fevd_r_tables <- lapply(horizons_to_report, extract_fevd_r)
+
+# Separate and clean tables for each horizon
+for (i in seq_along(horizons_to_report)) {
+  horizon <- horizons_to_report[i]
+  table_name <- paste0("fevd_r_horizon_", horizon)  # Dynamically name each table
+  assign(table_name, fevd_r_tables[[i]])  # Create a separate object for each table
+  
+  # Clean up the table for better readability
+  cleaned_table <- fevd_r_tables[[i]] %>%
+    dplyr::select(Response_Variable, Median, Lower_68, Upper_68) %>%
+    dplyr::mutate(
+      Median = round(Median, 3),
+      Lower_68 = round(Lower_68, 3),
+      Upper_68 = round(Upper_68, 3)
+    ) %>%
+    dplyr::arrange(desc(Median))
+  
+  # Print the table
+  cat("\nFEVD Contributions from Shock in 'r' at Horizon", horizon, ":\n")
+  print(cleaned_table)
+  
+  # Save to CSV
+  write.csv(cleaned_table, paste0("FEVD_Shock_r_Horizon_", horizon, ".csv"), row.names = FALSE)
+}
+
+# Combine all results into one table for plotting
+fevd_r_combined <- do.call(rbind, fevd_r_tables)
+
+# Remove rows with missing values for plotting
+fevd_r_combined <- fevd_r_combined %>%
+  filter(!is.na(Median), !is.na(Lower_68), !is.na(Upper_68))
+
+# Plot for FEVD contributions from shock in 'r'
+ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, fill = Response_Variable)) +
+  geom_line(size = 1.2) +
+  geom_ribbon(aes(ymin = Lower_68, ymax = Upper_68), alpha = 0.15) +
+  scale_color_viridis_d(option = "D", begin = 0, end = 0.9) +
+  scale_fill_viridis_d(option = "D", begin = 0, end = 0.9) +
+  labs(
+    title = "FEVD Contributions from a Shock in 'r'",
+    subtitle = "Median contributions with 68% credible intervals across horizons",
+    x = "Horizon (Quarters)",
+    y = "Variance Contribution (%)",
+    color = "Response Variable",
+    fill = "Response Variable"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12, face = "bold"),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.subtitle = element_text(size = 14, margin = margin(b = 10)),
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    strip.text = element_text(size = 12, face = "bold")
+  )
 
 
 
@@ -339,3 +364,5 @@ for (ordering in orderings) {
 best_forecast <- forecast_results[which.min(forecast_results$RMSE), ]
 print("Best Forecast Configuration:")
 print(best_forecast)
+
+
