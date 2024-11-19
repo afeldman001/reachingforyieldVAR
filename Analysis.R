@@ -205,9 +205,9 @@ ggplot(key_fevd_r, aes(x = Horizon, y = Median, color = Response_Variable, group
   ) +
   theme_minimal(base_size = 14) +
   theme(
-    legend.position = "bottom",
-    legend.title = element_text(size = 12, face = "bold"),
-    legend.text = element_text(size = 10),
+    legend.position = "right",
+    legend.title = element_text(size = 10, face = "bold"),
+    legend.text = element_text(size = 8),
     plot.title = element_text(size = 16, face = "bold"),
     plot.subtitle = element_text(size = 14, margin = margin(b = 10)),
     axis.title = element_text(size = 14),
