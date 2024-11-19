@@ -141,18 +141,6 @@ dimnames(fevd_quantiles) <- list(
   Shock = irf_result$variables
 )
 
-# Verify normalization for all variables across all shocks at each horizon
-verify_normalization <- function(horizon) {
-  total_contributions <- apply(fevd_quantiles["50%", , horizon + 1, ], 1, sum)
-  cat("\nNormalization check at Horizon", horizon, ":\n")
-  print(total_contributions)
-}
-
-# Check normalization for all horizons
-for (h in 0:(length(dimnames(fevd_quantiles)$Horizon) - 1)) {
-  verify_normalization(h)
-}
-
 # Function to extract and normalize contributions for the shock in 'r'
 extract_normalized_fevd_r <- function(horizon) {
   # Extract the contributions of the shock in 'r' to all variables
@@ -178,12 +166,19 @@ fevd_r_tables <- lapply(horizons_to_report, extract_normalized_fevd_r)
 # Combine all results into one table for inspection
 fevd_r_combined <- do.call(rbind, fevd_r_tables)
 
+# Focus on Key Variables (e.g., 'ra', 'market_diff', 'cci_diff', etc.)
+key_variables <- c("ra", "market_diff", "cci_diff", "sentiment", "u")
+
+# Filter combined results for key variables
+key_fevd_r <- fevd_r_combined %>%
+  filter(Response_Variable %in% key_variables)
+
 # Save separate and combined results
 for (i in seq_along(horizons_to_report)) {
   horizon <- horizons_to_report[i]
   table_name <- paste0("normalized_fevd_r_horizon_", horizon)
   cleaned_table <- fevd_r_tables[[i]] %>%
-    dplyr::mutate(Median = round(Median, 3)) %>%
+    dplyr::mutate(Median = round(Median, 6)) %>%
     dplyr::arrange(desc(Median))
   
   assign(table_name, cleaned_table)
@@ -196,13 +191,13 @@ for (i in seq_along(horizons_to_report)) {
   print(cleaned_table)
 }
 
-# Improved plot for normalized contributions
-ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, group = Response_Variable)) +
+# Improved plot for normalized contributions (key variables)
+ggplot(key_fevd_r, aes(x = Horizon, y = Median, color = Response_Variable, group = Response_Variable)) +
   geom_line(size = 1.2) +
   geom_point(size = 3) +
   scale_color_viridis_d(option = "D", begin = 0, end = 0.9) +
   labs(
-    title = "Normalized FEVD Contributions from a Shock in 'r'",
+    title = "Normalized FEVD Contributions from a Shock in 'r' (Key Variables)",
     subtitle = "Normalized median contributions across horizons",
     x = "Horizon (Quarters)",
     y = "Normalized Variance Contribution (%)",
@@ -218,6 +213,17 @@ ggplot(fevd_r_combined, aes(x = Horizon, y = Median, color = Response_Variable, 
     axis.title = element_text(size = 14),
     axis.text = element_text(size = 12)
   )
+
+# Summary statistics for 'ra' contributions across horizons
+ra_summary <- fevd_r_combined %>%
+  filter(Response_Variable == "ra") %>%
+  summarise(
+    Max_Contribution = max(Median),
+    Min_Contribution = min(Median),
+    Avg_Contribution = mean(Median)
+  )
+cat("\nSummary Statistics for 'ra' Contributions:\n")
+print(ra_summary)
 
 
 #### Model Configuration Analysis #####
