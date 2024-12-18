@@ -442,6 +442,9 @@ hp_data <- hp_data %>%
   ) %>%
   arrange(date) # ensure the dataframe remains ordered by date
 
+# Truncate the last row of hp_data to remove NAs
+hp_data_clean <- hp_data[-nrow(hp_data), ]
+
 # reshape hp_data to long format for ggplot
 hp_data_long <- hp_data %>%
   pivot_longer(
@@ -469,7 +472,7 @@ hp_data_long <- hp_data %>%
       Variable,
       "CPI_Cycle" = "Log-transformed CPI Cycle",
       "IP_Index_Cycle" = "Log-transformed IP Index Cycle",
-      "PPI_Cylcel" = "Log-transformed PPI Cycle",
+      "PPI_Cycle" = "Log-transformed PPI Cycle",
       "FFR_Cycle" = "FFR Cycle",
       "SP500_Cycle" = "Log-transformed S&P 500 Cycle",
       "Economic_Shock" = "Economic Shock Dummy-Variable",
@@ -500,62 +503,12 @@ ggplot(hp_data_long, aes(x = date, y = Value, color = Variable)) +
     axis.text.x = element_text(angle = 45, hjust = 1)    # rotate x-axis labels for clarity
   )
 
-#### define a function to calculate AIC and SIC for a range of lags ###
+################ Perform lag-order selection ##################
 
-calculate_aic_sic <- function(data, max_lag) {
-  # ensure data is a matrix
-  data_matrix <- as.matrix(data)
-  T <- nrow(data_matrix) # number of observations
-  K <- ncol(data_matrix) # number of variables
-  
-  # initialize storage for AIC and SIC values
-  aic_values <- numeric(max_lag)
-  sic_values <- numeric(max_lag)
-  
-  for (lag in 1:max_lag) {
-    # create lagged data matrices
-    lagged_data <- embed(data_matrix, lag + 1)
-    Y <- lagged_data[, 1:K] # dependent variable
-    X <- lagged_data[, -c(1:K)] # lagged independent variables
-    
-    # estimate VAR coefficients using OLS
-    B_hat <- solve(t(X) %*% X) %*% t(X) %*% Y
-    residuals <- Y - X %*% B_hat
-    Sigma_u_hat <- (t(residuals) %*% residuals) / (T - lag * K)
-    
-    # calculate AIC and SIC
-    log_likelihood <- -0.5 * T * (K * log(2 * pi) + log(det(Sigma_u_hat)) + K)
-    num_parameters <- K * K * lag # number of parameters in the VAR
-    aic_values[lag] <- -2 * log_likelihood + 2 * num_parameters
-    sic_values[lag] <- -2 * log_likelihood + log(T) * num_parameters
-  }
-  
-  # determine the optimal lag based on AIC and SIC
-  optimal_aic_lag <- which.min(aic_values)
-  optimal_sic_lag <- which.min(sic_values)
-  
-  return(list(aic_values = aic_values, sic_values = sic_values, 
-              optimal_aic_lag = optimal_aic_lag, optimal_sic_lag = optimal_sic_lag))
-}
+# perform lag order selection for the VAR system using hp_data
+lag_selection <- VARselect(as.matrix(hp_data_clean[, -1]), lag.max = 12, type = "const")
 
-# apply the function to your detrended data
-detrended_vars <- hp_data %>%
-  dplyr::select(-date) %>% # exclude the date column
-  drop_na() # ensure there are no missing values
-
-# set the maximum number of lags to consider
-max_lag <- 8
-
-# calculate AIC and SIC
-aic_sic_results <- calculate_aic_sic(detrended_vars, max_lag)
-
-# print the results
-print("AIC values for each lag:")
-print(aic_sic_results$aic_values)
-
-print("SIC values for each lag:")
-print(aic_sic_results$sic_values)
-
-print(paste("Optimal lag based on AIC:", aic_sic_results$optimal_aic_lag))
-print(paste("Optimal lag based on SIC:", aic_sic_results$optimal_sic_lag))
-
+# display the optimal lags for each criterion
+cat("Optimal lag order based on AIC:", lag_selection$selection["AIC(n)"], "\n")
+cat("Optimal lag order based on SIC:", lag_selection$selection["SC(n)"], "\n")
+cat("Optimal lag order based on HQC:", lag_selection$selection["HQ(n)"], "\n")
