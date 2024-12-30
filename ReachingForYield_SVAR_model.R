@@ -6,8 +6,8 @@
 # Contact: aaron.feldman@student.uni-tuebingen.de, chirag.khanna@student.uni-tuebingen.de
 
 # Clear workspace and console output
-rm(list = ls())
-cat("\014")
+rm(list = ls()) # clears the environment
+cat("\014") # clears the console
 
 # Load required libraries
 library(dplyr)
@@ -50,6 +50,35 @@ B_0_inv <- t(chol(Sigma_u))
 cat("Cholesky decomposition of the residual covariance matrix (B_0_inv):\n")
 print(B_0_inv)
 
+# Identify the index for the FFR_Cycle variable
+ffr_shock_index <- which(variables == "FFR_Cycle")
+
+# Scale the FFR shock to reflect a 1% change
+scaling_factor_ffr <- 1 / abs(B_0_inv[ffr_shock_index, ffr_shock_index])
+B_0_inv_scaled <- B_0_inv
+B_0_inv_scaled[, ffr_shock_index] <- B_0_inv[, ffr_shock_index] * scaling_factor_ffr
+
+# Scale the Volatility shock to reflect a 1 standard deviation change
+volatility_shock_index <- which(variables == "Volatility_Shock")
+scaling_factor_vol <- 1 / abs(B_0_inv[volatility_shock_index, volatility_shock_index])
+B_0_inv_scaled[, volatility_shock_index] <- B_0_inv[, volatility_shock_index] * scaling_factor_vol
+
+# Scale the Uncertainty Cycle (volatility component) to reflect a 1 standard deviation change
+uncertainty_shock_index <- which(variables == "Uncertainty_Cycle")
+scaling_factor_uncertainty <- 1 / abs(B_0_inv[uncertainty_shock_index, uncertainty_shock_index])
+B_0_inv_scaled[, uncertainty_shock_index] <- B_0_inv[, uncertainty_shock_index] * scaling_factor_uncertainty
+
+# Scale the Risk Aversion Cycle (volatility component) to reflect a 1 standard deviation change
+risk_aversion_shock_index <- which(variables == "Risk_Aversion_Cycle")
+scaling_factor_risk_aversion <- 1 / abs(B_0_inv[risk_aversion_shock_index, risk_aversion_shock_index])
+B_0_inv_scaled[, risk_aversion_shock_index] <- B_0_inv[, risk_aversion_shock_index] * scaling_factor_risk_aversion
+
+# Verify scaling factors and indices
+cat("Uncertainty Cycle Shock Index:", uncertainty_shock_index, "\n")
+cat("Risk Aversion Cycle Shock Index:", risk_aversion_shock_index, "\n")
+cat("Scaling Factor (Uncertainty):", scaling_factor_uncertainty, "\n")
+cat("Scaling Factor (Risk Aversion):", scaling_factor_risk_aversion, "\n")
+
 # Construct companion matrix
 A_comp <- matrix(0, nvars * p, nvars * p)
 A_comp[1:nvars, 1:(nvars * p)] <- t(B_hat[-1, ])
@@ -88,37 +117,157 @@ cat("Impact response of FFR to its own shock (should be -1):", impact_response_f
 cat("\nImpact matrix (B_0_inv_scaled) after normalization and sign reversal of the FFR shock:\n")
 print(B_0_inv_scaled)
 
-# Step 4: Extract and plot responses of Risk Assets to Economic Shock and FFR Shock
+# Step 4: Extract and plot responses of Risk Assets and Risk Aversion Cycle to FFR Shock
 risk_assets_index <- which(variables == "Household_Equity_Cycle")
-economic_shock_index <- which(variables == "Economic_Shock")
+risk_aversion_index <- which(variables == "Risk_Aversion_Cycle")
 
-response_risk_assets_ffr <- irfMat_scaled[risk_assets_index, ffr_shock_index, ]
-response_risk_assets_volatility <- irfMat_scaled[risk_assets_index, economic_shock_index, ]
+response_risk_assets_ffr <- irfMat_scaled[risk_assets_index, ffr_shock_index, ] * 100
+response_risk_aversion_ffr <- irfMat_scaled[risk_aversion_index, ffr_shock_index, ] * 100
 
-# Combine responses into a single dataframe
-irf_combined <- data.frame(
+# Bootstrap confidence intervals for Household_Equity_Cycle response to FFR shock
+n_boot <- 1000
+irf_boot <- matrix(0, n_boot, nsteps + 1)  # Store bootstrapped IRFs
+
+set.seed(123)  # For reproducibility
+for (b in 1:n_boot) {
+  # Resample residuals with replacement
+  u_boot <- u_hat[sample(1:nrow(u_hat), nrow(u_hat), replace = TRUE), ]
+  
+  # Generate bootstrapped Y matrix
+  Y_boot <- matrix(0, nrow = T, ncol = nvars)
+  Y_boot[1:p, ] <- Y[1:p, ]  # Initialize with original lags
+  for (t in (p + 1):T) {
+    lagged_vars <- c(1, as.vector(t(Y_boot[(t - p):(t - 1), ])))  # Constant + lagged variables
+    lagged_vars <- matrix(lagged_vars, ncol = 1)
+    Y_boot[t, ] <- (t(B_hat) %*% lagged_vars)[, 1] + u_boot[t - p, ]
+  }
+  
+  # Recompute residual covariance matrix Sigma_u_boot
+  Sigma_u_boot <- crossprod(u_boot) / (T - p - nparams)
+  
+  # Perform Cholesky decomposition for the bootstrap sample
+  B_0_inv_boot <- t(chol(Sigma_u_boot))
+  
+  # Scale the bootstrap impact matrix for shocks
+  B_0_inv_boot_scaled <- B_0_inv_boot
+  B_0_inv_boot_scaled[, ffr_shock_index] <- -B_0_inv_boot[, ffr_shock_index] * scaling_factor_ffr
+  # Add scaling for other shocks if needed
+  
+  # Recompute IRFs for bootstrapped sample
+  irfMat_boot <- array(0, c(nvars, nvars, nsteps + 1))
+  irfMat_boot[, , 1] <- B_0_inv_boot_scaled  # Initial impact matrix
+  Ah_boot <- diag(nvars * p)  # Identity matrix
+  for (h in 1:nsteps) {
+    Ah_boot <- Ah_boot %*% A_comp
+    irfMat_boot[, , h + 1] <- Ah_boot[1:nvars, 1:nvars] %*% B_0_inv_boot_scaled
+  }
+  
+  # Store the bootstrapped IRFs for the response of Household_Equity_Cycle to FFR shock
+  irf_boot[b, ] <- irfMat_boot[risk_assets_index, ffr_shock_index, ] * 100
+}
+
+
+# Compute confidence intervals (68% and 95%) from bootstrapped IRFs
+ci_95 <- apply(irf_boot, 2, quantile, probs = c(0.025, 0.975))
+ci_68 <- apply(irf_boot, 2, quantile, probs = c(0.16, 0.84))
+
+# Add confidence intervals to the IRF data frame
+irf_data <- data.frame(
   Horizon = 0:nsteps,
-  Volatility_Shock = response_risk_assets_volatility,
-  FFR_Shock = response_risk_assets_ffr
+  Response = response_risk_assets_ffr,
+  CI_95_Lower = ci_95[1, ],
+  CI_95_Upper = ci_95[2, ],
+  CI_68_Lower = ci_68[1, ],
+  CI_68_Upper = ci_68[2, ]
 )
 
-# Melt dataframe for ggplot
-irf_long <- pivot_longer(irf_combined, cols = c("Volatility_Shock", "FFR_Shock"), 
-                         names_to = "Shock", values_to = "Response")
 
-# Plot the IRFs
-ggplot(irf_long, aes(x = Horizon, y = Response, color = Shock)) +
-  geom_line(size = 1.2) +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +  # Add zero baseline
+# Plot response of Household_Equity_Cycle to FFR Shock with dashed confidence intervals
+ggplot(irf_data, aes(x = Horizon, y = Response)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_line(aes(y = CI_95_Lower), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_95_Upper), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_68_Lower), linetype = "dashed", color = "black") +
+  geom_line(aes(y = CI_68_Upper), linetype = "dashed", color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
   labs(
-    title = "Response of Risk Assets to Volatility Shock and Unit Reduction in FFR",
-    x = "Horizon",
-    y = "Response",
-    color = "Shock Type"
+    title = "Response of Household Risky Asset Allocations to FFR Shock",
+    x = "Horizon (Months)",
+    y = "Response (% Change)"
   ) +
-  scale_color_manual(values = c("FFR_Shock" = "red", "Volatility_Shock" = "blue")) +
   theme_minimal() +
-  theme(legend.position = "bottom", text = element_text(size = 12))
+  theme(text = element_text(size = 12))
+
+# Compute confidence intervals (68% and 95%) for Risk_Aversion_Cycle response to FFR shock
+irf_boot_risk_aversion <- matrix(0, n_boot, nsteps + 1)  # Store bootstrapped IRFs for risk aversion
+
+set.seed(123)  # For reproducibility
+for (b in 1:n_boot) {
+  # Resample residuals with replacement
+  u_boot <- u_hat[sample(1:nrow(u_hat), nrow(u_hat), replace = TRUE), ]
+  
+  # Generate bootstrapped Y matrix
+  Y_boot <- matrix(0, nrow = T, ncol = nvars)
+  Y_boot[1:p, ] <- Y[1:p, ]  # Initialize with original lags
+  for (t in (p + 1):T) {
+    lagged_vars <- c(1, as.vector(t(Y_boot[(t - p):(t - 1), ])))  # Constant + lagged variables
+    lagged_vars <- matrix(lagged_vars, ncol = 1)
+    Y_boot[t, ] <- (t(B_hat) %*% lagged_vars)[, 1] + u_boot[t - p, ]
+  }
+  
+  # Recompute residual covariance matrix Sigma_u_boot
+  Sigma_u_boot <- crossprod(u_boot) / (T - p - nparams)
+  
+  # Perform Cholesky decomposition for the bootstrap sample
+  B_0_inv_boot <- t(chol(Sigma_u_boot))
+  
+  # Scale the bootstrap impact matrix for shocks
+  B_0_inv_boot_scaled <- B_0_inv_boot
+  B_0_inv_boot_scaled[, ffr_shock_index] <- -B_0_inv_boot[, ffr_shock_index] * scaling_factor_ffr
+  
+  # Recompute IRFs for bootstrapped sample
+  irfMat_boot <- array(0, c(nvars, nvars, nsteps + 1))
+  irfMat_boot[, , 1] <- B_0_inv_boot_scaled  # Initial impact matrix
+  Ah_boot <- diag(nvars * p)  # Identity matrix
+  for (h in 1:nsteps) {
+    Ah_boot <- Ah_boot %*% A_comp
+    irfMat_boot[, , h + 1] <- Ah_boot[1:nvars, 1:nvars] %*% B_0_inv_boot_scaled
+  }
+  
+  # Store the bootstrapped IRFs for the response of Risk_Aversion_Cycle to FFR shock
+  irf_boot_risk_aversion[b, ] <- irfMat_boot[risk_aversion_index, ffr_shock_index, ] * 100
+}
+
+# Compute confidence intervals (68% and 95%) from bootstrapped IRFs for Risk_Aversion_Cycle
+ci_95_risk_aversion <- apply(irf_boot_risk_aversion, 2, quantile, probs = c(0.025, 0.975))
+ci_68_risk_aversion <- apply(irf_boot_risk_aversion, 2, quantile, probs = c(0.16, 0.84))
+
+# Add confidence intervals to the IRF data frame for Risk_Aversion_Cycle
+irf_data_risk_aversion <- data.frame(
+  Horizon = 0:nsteps,
+  Response = response_risk_aversion_ffr,
+  CI_95_Lower = ci_95_risk_aversion[1, ],
+  CI_95_Upper = ci_95_risk_aversion[2, ],
+  CI_68_Lower = ci_68_risk_aversion[1, ],
+  CI_68_Upper = ci_68_risk_aversion[2, ]
+)
+
+# Plot response of Risk_Aversion_Cycle to FFR Shock with dashed confidence intervals
+ggplot(irf_data_risk_aversion, aes(x = Horizon, y = Response)) +
+  geom_line(color = "orange", size = 1.2) +
+  geom_line(aes(y = CI_95_Lower), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_95_Upper), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_68_Lower), linetype = "dashed", color = "black") +
+  geom_line(aes(y = CI_68_Upper), linetype = "dashed", color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  labs(
+    title = "Response of Risk Aversion to FFR Shock",
+    x = "Horizon (Months)",
+    y = "Response (% Change)"
+  ) +
+  theme_minimal() +
+  theme(text = element_text(size = 12))
+
 
 # Step 5: Save IRF data for further analysis
 irf_data <- data.frame(
@@ -155,6 +304,14 @@ B_0_inv_reversed <- t(chol(Sigma_u_reversed))
 cat("Cholesky decomposition for reversed order:\n")
 print(B_0_inv_reversed)
 
+# Identify the index for the FFR_Cycle variable in the reversed model
+ffr_shock_index_reversed <- which(reversed_variables == "FFR_Cycle")
+
+# Scale FFR shock in reversed model
+scaling_factor_ffr_reversed <- 1 / abs(B_0_inv_reversed[ffr_shock_index_reversed, ffr_shock_index_reversed])
+B_0_inv_reversed_scaled <- B_0_inv_reversed
+B_0_inv_reversed_scaled[, ffr_shock_index_reversed] <- B_0_inv_reversed[, ffr_shock_index_reversed] * scaling_factor_ffr_reversed
+
 # Normalize and reverse the FFR shock for the reversed model
 ffr_shock_index_reversed <- which(reversed_variables == "FFR_Cycle")
 B_0_inv_reversed_scaled <- normalize_shock(B_0_inv_reversed, ffr_shock_index_reversed)
@@ -186,7 +343,7 @@ print(B_0_inv_reversed_scaled)
 cat("\n--- Simplified 4-Variable SVAR Model ---\n")
 
 # Select the desired variables for the simplified model
-simplified_variables <- c("FFR_Cycle", "Risk_Aversion_Cycle", "Uncertainty_Cycle", "Household_Equity_Cycle")
+simplified_variables <- c("Risk_Aversion_Cycle", "Uncertainty_Cycle", "Household_Equity_Cycle", "FFR_Cycle")
 Y_simplified <- Y[, simplified_variables]
 colnames(Y_simplified) <- simplified_variables
 nvars_simplified <- length(simplified_variables)
@@ -206,6 +363,14 @@ Sigma_u_simplified <- crossprod(u_hat_simplified) / (T - p - nvars_simplified)
 B_0_inv_simplified <- t(chol(Sigma_u_simplified))
 cat("Cholesky decomposition for simplified model:\n")
 print(B_0_inv_simplified)
+
+# Identify the index for the FFR_Cycle variable in the simplified model
+ffr_shock_index_simplified <- which(simplified_variables == "FFR_Cycle")
+
+# Scale FFR shock in simplified model
+scaling_factor_ffr_simplified <- 1 / abs(B_0_inv_simplified[ffr_shock_index_simplified, ffr_shock_index_simplified])
+B_0_inv_simplified_scaled <- B_0_inv_simplified
+B_0_inv_simplified_scaled[, ffr_shock_index_simplified] <- B_0_inv_simplified[, ffr_shock_index_simplified] * scaling_factor_ffr_simplified
 
 # Normalize and reverse the FFR shock for the simplified model
 ffr_shock_index_simplified <- which(simplified_variables == "FFR_Cycle")
@@ -237,7 +402,7 @@ print(B_0_inv_simplified_scaled)
 # Extract IRFs for baseline model
 irf_baseline <- data.frame(
   Horizon = 0:nsteps,
-  Response = irfMat_scaled[risk_assets_index, ffr_shock_index, ],
+  Response = irfMat_scaled[risk_assets_index, ffr_shock_index, ] * 100,
   Model = "Baseline"
 )
 
@@ -246,7 +411,7 @@ risk_assets_index_reversed <- which(reversed_variables == "Household_Equity_Cycl
 ffr_shock_index_reversed <- which(reversed_variables == "FFR_Cycle")
 irf_reversed <- data.frame(
   Horizon = 0:nsteps,
-  Response = irfMat_reversed[risk_assets_index_reversed, ffr_shock_index_reversed, ],
+  Response = irfMat_reversed[risk_assets_index_reversed, ffr_shock_index_reversed, ] * 100,
   Model = "Reversed Order"
 )
 
@@ -255,7 +420,7 @@ risk_assets_index_simplified <- which(simplified_variables == "Household_Equity_
 ffr_shock_index_simplified <- which(simplified_variables == "FFR_Cycle")
 irf_simplified <- data.frame(
   Horizon = 0:nsteps,
-  Response = irfMat_simplified[risk_assets_index_simplified, ffr_shock_index_simplified, ],
+  Response = irfMat_simplified[risk_assets_index_simplified, ffr_shock_index_simplified, ] * 100,
   Model = "Simplified"
 )
 
@@ -280,10 +445,10 @@ ggplot(combined_irfs, aes(x = Horizon, y = Response, color = Model)) +
   geom_line(size = 1.2) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
   labs(
-    title = "IRFs: Response of Household Risky Asset Allocations to FFR Shocks",
+    title = "Response of Risk Assets to FFR and Volatility Shocks",
     x = "Horizon (Months)",
-    y = "Response of Risky Assets",
-    color = "Model"
+    y = "Response of Risky Assets (% Change)",
+    color = "Shock Type"
   ) +
   scale_color_manual(values = c("Baseline" = "blue", "Reversed Order" = "red", "Simplified" = "green")) +
   theme_minimal() +
