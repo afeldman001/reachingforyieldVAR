@@ -102,7 +102,7 @@ expansionary_events <- as.Date(c("1990-10-01", "1997-11-01", "1998-09-01", "2001
 
 # Add the dummy variable to merged_data
 merged_data <- merged_data %>%
-  mutate(Economic_Shock = ifelse(date %in% expansionary_events, 1, 0))
+  mutate(Volatility_Shock = ifelse(date %in% expansionary_events, 1, 0))
 
 # ensure log-transformed variables are interpolated for missing values
 merged_data <- merged_data %>%
@@ -151,7 +151,7 @@ hp_data <- data.frame(
   IP_Index_Cycle = hp_log_ip_index$cycle,
   FFR_Cycle = hp_log_ffr$cycle,
   PPI_Cycle = hp_log_ppi$cycle,
-  Economic_Shock = merged_data$Economic_Shock,
+  Volatility_Shock = merged_data$Volatility_Shock,
   Household_Equity_Cycle = hp_log_household_equity$cycle
 )
 
@@ -448,11 +448,11 @@ hp_data <- hp_data %>%
   left_join(detrended_vol_data, by = "date") %>%
   mutate(
     SP500_Cycle = merged_data$sp500_cycle, # add SP500_Cycle from merged_data
-    Economic_Shock = merged_data$Economic_Shock # add Economic_Shock from merged_data
+    Volatility_Shock = merged_data$Volatility_Shock # add Volatility_Shock from merged_data
   ) %>%
   dplyr::select(
     date, 
-    Economic_Shock,          # 1. Economic Shock
+    Volatility_Shock,          # 1. Volatility Shock
     IP_Index_Cycle,          # 2. IP Index Cycle
     CPI_Cycle,               # 3. CPI Cycle
     PPI_Cycle,               # 4. PPI Cycle
@@ -522,7 +522,7 @@ hp_data_long <- hp_data %>%
     Variable = factor(
       Variable,
       levels = c(
-        "Economic_Shock",
+        "Volatility_Shock",
         "IP_Index_Cycle",
         "CPI_Cycle",
         "PPI_Cycle",
@@ -536,7 +536,7 @@ hp_data_long <- hp_data %>%
     # rename variables for better clarity in the plot
     Variable = recode(
       Variable,
-      "Economic_Shock" = "Economic Shock Dummy-Variable",
+      "Volatility_Shock" = "Volatility Shock Dummy-Variable",
       "IP_Index_Cycle" = "Log-transformed IP Index Cycle",
       "CPI_Cycle" = "Log-transformed CPI Cycle",
       "PPI_Cycle" = "Log-transformed PPI Cycle",
