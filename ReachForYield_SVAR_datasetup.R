@@ -1,10 +1,11 @@
 # Data setup for Seminar thesis: 
 # Interest Rate Cuts and Household Investment in Risky Assets: An empirical examination of the ‘Reaching for Yield’ Hypothesis
-# by Aaron Feldman and Chirag Khanna
+# by Aaron Feldman, Chirag Khanna, and Mohammad Rahbari
 # University of Tuebingen, WS 2024-2025
 # Contact: 
 # aaron.feldman@student.uni-tuebingen.de
 # chirag.khanna@student.uni-tuebingen.de
+# mohammad.rahbari@student.uni-tuebingen.de
 
 # install and load required packages
 install.packages(c("yfR", "dplyr", "lubridate", "zoo", "ggplot2", "stats", "mFilter", "tidyr", "purr", "vars", "tseries", "forecast"))
@@ -33,12 +34,13 @@ library(forecast)
 
 # define GitHub raw URLs for additional datasets
 cpi_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/CPIAUCSL%20(1).csv"
-ppi_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/WPSID61.csv"
+#ppi_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/WPSID61.csv"
 ip_index_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/INDPRO.csv"
 ffr_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/FEDFUNDS.csv"
 cc_data_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/UMCSENT.csv"
 unrate_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/UNRATE%20(1).csv"
 dspi_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/DSPI.csv"
+pce_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/PCE.csv"
 household_equity_url <- "https://raw.githubusercontent.com/afeldman001/reachingforyieldVAR/refs/heads/main/Risk_Assets.csv"
 
 # fetch and process CPI data
@@ -51,13 +53,13 @@ cpi_data <- read.csv(cpi_url) %>%
   filter(!is.na(CPI))                # ensure no missing values
 
 # fetch and process PPI data
-ppi_data <- read.csv(ppi_url) %>%
-  mutate(
-    date = as.Date(observation_date), # convert observation_date to Date
-    PPI = WPSID61                     # rename the PPI column
-  ) %>%
-  dplyr::select(date, PPI) %>%               # keep only the relevant columns
-  filter(!is.na(PPI))                 # ensure no missing values
+#ppi_data <- read.csv(ppi_url) %>%
+#  mutate(
+#    date = as.Date(observation_date), # convert observation_date to Date
+#    PPI = WPSID61                     # rename the PPI column
+#  ) %>%
+#  dplyr::select(date, PPI) %>%               # keep only the relevant columns
+#  filter(!is.na(PPI))                 # ensure no missing values
 
 # fetch and process Industrial Production Index data
 ip_index_data <- read.csv(ip_index_url) %>%
@@ -119,11 +121,21 @@ household_equity_monthly <- household_equity_data %>%
   arrange(date) %>%
   mutate(Household_Equity = zoo::na.approx(Household_Equity, na.rm = FALSE))
 
+# fetch and process disposible income data
+pce_data <- read.csv(pce_url) %>%
+  mutate(
+    date = as.Date(observation_date),  # Convert observation_date to Date
+    PCE = PCE           # Rename the column
+  ) %>%
+  dplyr::select(date, PCE) %>%  # Select relevant columns
+  filter(!is.na(PCE))           # Remove missing values
+
+
 # merge all datasets into one dataframe
 merged_data <- reduce(
   list(
     cpi_data,
-    ppi_data,
+    pce_data,
     ip_index_data,
     ffr_data,
     household_equity_monthly,
@@ -150,7 +162,7 @@ merged_data <- merged_data %>%
 merged_data <- merged_data %>%
   mutate(
     log_CPI = log(CPI),
-    log_PPI = ifelse(PPI > 0, log(PPI), NA),
+    log_PCE = log(PCE),
     log_IP_Index = ifelse(IP_Index > 0, log(IP_Index), NA),
     log_Household_Equity = ifelse(Household_Equity > 0, log(Household_Equity), NA),
     log_Disposable_Income = ifelse(Disposable_Income > 0, log(Disposable_Income), NA),  # Log Disposable Income
@@ -158,22 +170,21 @@ merged_data <- merged_data %>%
   ) %>%
   # interpolate missing values for log-transformed series
   mutate(
-    log_PPI = zoo::na.approx(log_PPI, na.rm = FALSE),
     log_IP_Index = zoo::na.approx(log_IP_Index, na.rm = FALSE),
     log_Household_Equity = zoo::na.approx(log_Household_Equity, na.rm = FALSE),
     log_Disposable_Income = zoo::na.approx(log_Disposable_Income, na.rm = FALSE),
     log_Consumer_Confidence = zoo::na.approx(log_Consumer_Confidence, na.rm = FALSE)
   ) %>%
   # Drop rows where interpolation wasn't possible
-  filter(!is.na(log_CPI) & !is.na(log_PPI) & !is.na(log_IP_Index) & 
+  filter(!is.na(log_CPI) & !is.na(log_IP_Index) & 
            !is.na(log_Household_Equity) & !is.na(log_Disposable_Income) & 
            !is.na(log_Consumer_Confidence))
 
 # ensure log-transformed variables exist and then compute differences
 merged_data <- merged_data %>%
   mutate(
-    log_CPI = c(NA, diff(log_CPI)),                           # log-difference CPI
-    log_PPI = c(NA, diff(log_PPI)),                           # log-difference PPI
+    log_CPI = c(NA, diff(log_CPI)), # log-difference CPI
+    log_PCE = c(NA, diff(log_PCE)), # log-difference PCE
     log_IP_Index = c(NA, diff(log_IP_Index)),                 # log-difference IP Index
     FFR = c(NA, diff(FFR)),                                   # difference FFR (already raw scale)
     log_Household_Equity = c(NA, diff(log_Household_Equity)), # log-difference Household Equity
@@ -181,7 +192,7 @@ merged_data <- merged_data %>%
     Unemployment_Rate = c(NA, diff(Unemployment_Rate))        # difference Unemployment Rate
   ) %>%
   # remove rows with NA values resulting from differencing
-  filter(!is.na(log_CPI) & !is.na(log_PPI) & !is.na(log_IP_Index) & 
+  filter(!is.na(log_CPI) & !is.na(log_IP_Index) & 
            !is.na(FFR) & !is.na(log_Household_Equity) & 
            !is.na(log_Disposable_Income) & !is.na(Unemployment_Rate))
 
@@ -434,11 +445,11 @@ monthly_data <- monthly_data %>%
       Volatility_Shock,
       log_IP_Index, 
       log_CPI, 
-      log_PPI, 
       log_price_adjusted,
       FFR,
       log_Household_Equity,
-      log_Disposable_Income,   
+      log_Disposable_Income,
+      log_PCE,
       log_Consumer_Confidence, 
       Unemployment_Rate        
     ), 
@@ -451,11 +462,11 @@ monthly_data <- monthly_data %>%
     date,
     Volatility_Shock,
     log_IP_Index,
+    log_CPI,
     Unemployment_Rate,
     log_Disposable_Income,
+    log_PCE,
     log_Consumer_Confidence,
-    log_CPI,
-    log_PPI,
     Monthly_Uncertainty,      
     Monthly_Risk_Aversion,   
     log_price_adjusted,
@@ -516,11 +527,11 @@ monthly_data_long <- monthly_data %>%
       Variable,
       "Volatility_Shock" = "Volatility Shock",
       "log_IP_Index" = "Log-transformed IP Index",
+      "log_CPI" = "Log-transformed CPI",
       "Unemployment_Rate" = "Unemployment Rate",
       "log_Disposable_Income" = "log-transformed Disposable Income",
+      "log_PCE" = "log-transformed Personal Consumption Expenditures",
       "log_Consumer_Confidence" = "log-transformed Consumer Confidence",
-      "log_CPI" = "Log-transformed CPI",
-      "log_PPI" = "Log-transformed PPI",
       "Monthly_Uncertainty" = "Monthly Uncertainty",
       "Monthly_Risk_Aversion" = "Monthly Risk Aversion",
       "log_price_adjusted" = "Log-transformed Adjusted Price",
@@ -566,12 +577,12 @@ ggplot(filtered_data, aes(x = date, y = Value, color = Variable)) +
   ) +
   theme_minimal() +
   theme(
-    plot.title = element_text(size = 20, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 14),
-    axis.title.y = element_text(size = 14),
-    axis.text = element_text(size = 12),
-    legend.title = element_text(size = 14),
-    legend.text = element_text(size = 12)
+    plot.title = element_text(size = 30, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
+    legend.title = element_text(size = 30),
+    legend.text = element_text(size = 30)
   ) +
   scale_x_date(
     date_breaks = "5 years",
