@@ -1,9 +1,12 @@
 # SVAR Model: Seminar Thesis
 # Interest Rate Cuts and Household Investment in Risky Assets: 
 # An empirical examination of the 'Reaching for Yield' Hypothesis
-# Authors: Aaron Feldman and Chirag Khanna
+# by Aaron Feldman, Chirag Khanna, and Mohammad Rahbari
 # University of Tuebingen, WS 2024-2025
-# Contact: aaron.feldman@student.uni-tuebingen.de, chirag.khanna@student.uni-tuebingen.de
+# Contact: 
+# aaron.feldman@student.uni-tuebingen.de
+# chirag.khanna@student.uni-tuebingen.de
+# mohammad.rahbari@student.uni-tuebingen.de
 
 # Clear workspace and console output
 rm(list = ls()) # clears the environment
@@ -205,9 +208,9 @@ ggplot(irf_data, aes(x = Horizon, y = Response)) +
   theme(
     text = element_text(size = 16),
     plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 16),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
     panel.grid = element_blank()  # Removes all gridlines
   )
 
@@ -283,9 +286,9 @@ ggplot(irf_data_risk_aversion, aes(x = Horizon, y = Response)) +
   theme(
     text = element_text(size = 16),
     plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 16),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
     panel.grid = element_blank()  # Removes all gridlines
   )
 
@@ -366,9 +369,9 @@ ggplot(irf_data_uncertainty, aes(x = Horizon, y = Response)) +
   theme(
     text = element_text(size = 16),
     plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 16),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
     panel.grid = element_blank()  # Removes all gridlines
   )
 
@@ -530,12 +533,12 @@ ggplot(irf_data_vol, aes(x = Horizon, y = Response)) +
     y = "Response (% Change)"
   ) +
   theme_minimal() +
-  theme(
+   theme(
     text = element_text(size = 16),
     plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 16),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
     panel.grid = element_blank()  # Removes all gridlines
   )
 
@@ -547,6 +550,93 @@ irf_data <- data.frame(
   Horizon = rep(0:nsteps, nvars * nvars),
   Response = as.vector(irfMat_scaled)
 )
+
+
+
+
+
+# identify the index for the log_Consumer_Confidence variable
+consumer_confidence_index <- which(variables == "log_Consumer_Confidence")
+
+# extract the IRF for log_Consumer_Confidence to FFR Shock
+response_consumer_confidence_ffr <- irfMat_scaled[consumer_confidence_index, ffr_shock_index, ] * 100
+
+# bootstrap confidence intervals for Consumer Confidence response to FFR shock
+irf_boot_consumer <- matrix(0, n_boot, nsteps + 1)  # store bootstrapped IRFs
+
+for (b in 1:n_boot) {
+  # resample residuals with replacement
+  u_boot <- u_hat[sample(1:nrow(u_hat), nrow(u_hat), replace = TRUE), ]
+  
+  # generate bootstrapped Y matrix
+  Y_boot <- matrix(0, nrow = T, ncol = nvars)
+  Y_boot[1:p, ] <- Y[1:p, ]  # initialize with original lags
+  for (t in (p + 1):T) {
+    lagged_vars <- c(1, as.vector(t(Y_boot[(t - p):(t - 1), ])))  # constant + lagged variables
+    lagged_vars <- matrix(lagged_vars, ncol = 1)
+    Y_boot[t, ] <- (t(B_hat) %*% lagged_vars)[, 1] + u_boot[t - p, ]
+  }
+  
+  # recompute residual covariance matrix Sigma_u_boot
+  Sigma_u_boot <- crossprod(u_boot) / (T - p - nparams)
+  
+  # perform Cholesky decomposition for the bootstrap sample
+  B_0_inv_boot <- t(chol(Sigma_u_boot))
+  
+  # scale the bootstrap impact matrix for FFR shocks
+  B_0_inv_boot_scaled <- B_0_inv_boot
+  B_0_inv_boot_scaled[, ffr_shock_index] <- -B_0_inv_boot[, ffr_shock_index] * scaling_factor_ffr
+  
+  # recompute IRFs for bootstrapped sample
+  irfMat_boot <- array(0, c(nvars, nvars, nsteps + 1))
+  irfMat_boot[, , 1] <- B_0_inv_boot_scaled  # initial impact matrix
+  Ah_boot <- diag(nvars * p)  # identity matrix
+  for (h in 1:nsteps) {
+    Ah_boot <- Ah_boot %*% A_comp
+    irfMat_boot[, , h + 1] <- Ah_boot[1:nvars, 1:nvars] %*% B_0_inv_boot_scaled
+  }
+  
+  # store the bootstrapped IRFs for the response of log_Consumer_Confidence to FFR shock
+  irf_boot_consumer[b, ] <- irfMat_boot[consumer_confidence_index, ffr_shock_index, ] * 100
+}
+
+# compute confidence intervals (68% and 95%) from bootstrapped IRFs
+ci_95_consumer <- apply(irf_boot_consumer, 2, quantile, probs = c(0.025, 0.975))
+ci_68_consumer <- apply(irf_boot_consumer, 2, quantile, probs = c(0.16, 0.84))
+
+# add confidence intervals to the IRF data frame for Consumer Confidence
+irf_data_consumer <- data.frame(
+  Horizon = 0:nsteps,
+  Response = response_consumer_confidence_ffr,
+  CI_95_Lower = ci_95_consumer[1, ],
+  CI_95_Upper = ci_95_consumer[2, ],
+  CI_68_Lower = ci_68_consumer[1, ],
+  CI_68_Upper = ci_68_consumer[2, ]
+)
+
+# plot response of log_Consumer_Confidence to FFR Shock with dashed confidence intervals
+ggplot(irf_data_consumer, aes(x = Horizon, y = Response)) +
+  geom_line(color = "blue", size = 1.2) +
+  geom_line(aes(y = CI_95_Lower), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_95_Upper), linetype = "dashed", color = "red") +
+  geom_line(aes(y = CI_68_Lower), linetype = "dashed", color = "black") +
+  geom_line(aes(y = CI_68_Upper), linetype = "dashed", color = "black") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  labs(
+    title = "Response of Consumer Confidence to a 1% Expansionary FFR Shock",
+    x = "Horizon (Months)",
+    y = "Response (% Change)"
+  ) +
+  theme_minimal() +
+  theme(
+    text = element_text(size = 16),
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
+    axis.title.x = element_text(size = 35),
+    axis.title.y = element_text(size = 35),
+    axis.text = element_text(size = 30),
+    panel.grid = element_blank()  # removes all gridlines
+  )
+
 
 
 # SVAR Model Extensions: Reversed Order and Simplified Model
@@ -729,20 +819,22 @@ ggplot(combined_irfs, aes(x = Horizon, y = Response, color = Model)) +
   geom_line(size = 1.2) +
   geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
   labs(
-    title = "Response of Risk Assets to a 1% Expansionary FFR Shcok",
+    title = "Response of Risk Assets to a 1% Expansionary FFR Shock",
     x = "Horizon (Months)",
-    y = "Response of Risky Assets (% Change)",
+    y = "Response (% Change)",
     color = "Model Specification"
   ) +
   scale_color_manual(values = c("Baseline" = "blue", "Reversed Order" = "red", "Simplified" = "green")) +
   theme_minimal() +
   theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 18),
-    panel.grid = element_blank()  # Removes all gridlines
+    text = element_text(size = 16), # General text size
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5), # Title size and alignment
+    axis.title.x = element_text(size = 35), # X-axis title size
+    axis.title.y = element_text(size = 35), # Y-axis title size
+    axis.text = element_text(size = 30), # Axis tick label size
+    legend.title = element_text(size = 30), # Legend title size
+    legend.text = element_text(size = 25), # Legend text size
+    panel.grid = element_blank() # Removes all gridlines
   )
 
 # IRF Comparison for Different Lags in the Baseline Model
@@ -810,17 +902,18 @@ ggplot(combined_irfs_lags, aes(x = Horizon, y = Response, color = Lag)) +
   labs(
     title = "Response of Risky Assets to a 1% Expansionary FFR Shock for Different Lag Orders",
     x = "Horizon (Months)",
-    y = "Response of Risky Assets (% Change)",
+    y = "Response (% Change)",
     color = "Lag Order"
   ) +
   scale_color_manual(values = c("Lag 1" = "blue", "Lag 2" = "red", "Lag 3" = "green", "Lag 4" = "purple")) +
   theme_minimal() +
   theme(
-    text = element_text(size = 20),
-    plot.title = element_text(size = 25, face = "bold", hjust = 0.5),
-    axis.title.x = element_text(size = 20),
-    axis.title.y = element_text(size = 20),
-    axis.text = element_text(size = 18),
-    panel.grid = element_blank()  # Removes all gridlines
+    text = element_text(size = 16), # General text size
+    plot.title = element_text(size = 25, face = "bold", hjust = 0.5), # Title size and alignment
+    axis.title.x = element_text(size = 35), # X-axis title size
+    axis.title.y = element_text(size = 35), # Y-axis title size
+    axis.text = element_text(size = 30), # Axis tick label size
+    legend.title = element_text(size = 30), # Legend title size
+    legend.text = element_text(size = 25), # Legend text size
+    panel.grid = element_blank() # Removes all gridlines
   )
-
